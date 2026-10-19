@@ -322,9 +322,11 @@ class Qwen21Transformer(nn.Module):
 
         hidden_states = mx.concatenate([self.txt_in(encoder_hidden_states), self.img_in(hidden_states)], axis=1)
 
+        gradient_checkpointing = getattr(self, "gradient_checkpointing", False)
         for block in self.transformer_blocks:
             # mask None means padding-free: the segmented attention path (faster, same math)
-            hidden_states = block(
+            run = nn.utils.checkpoint(block) if gradient_checkpointing else block
+            hidden_states = run(
                 hidden_states, mod1, mod2, rope_cos, rope_sin, attn_mask, text_len if attn_mask is None else None
             )
 
