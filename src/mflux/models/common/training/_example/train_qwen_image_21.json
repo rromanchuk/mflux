@@ -1,0 +1,51 @@
+{
+  "model": "qwen-image-2.1",
+  "model_path": null,
+  "data": "/path/to/your/dataset",
+  "seed": 42,
+  "steps": 40,
+  "guidance": 1.0,
+  "quantize": null,
+  "low_ram": false,
+  "gradient_checkpointing": true,
+  "max_resolution": 1024,
+  "training_loop": {
+    "num_epochs": 150,
+    "batch_size": 1,
+    "timestep_low": 5,
+    "timestep_high": 40,
+    "timestep_type": "sigmoid"
+  },
+  "optimizer": {
+    "name": "AdamW",
+    "learning_rate": 1e-4,
+    "lr_schedule": "cosine",
+    "lr_warmup_steps": 100,
+    "lr_total_steps": 4500,
+    "max_grad_norm": 1.0
+  },
+  "checkpoint": {
+    "output_path": "train_qwen_image_21",
+    "save_frequency": 500
+  },
+  "monitoring": {
+    "preview_width": 1024,
+    "preview_height": 1024,
+    "plot_frequency": 20,
+    "generate_image_frequency": 500
+  },
+  "lora_layers": {
+    "targets": [
+      { "module_path": "transformer_blocks.{block}.attn.to_q",         "blocks": { "start": 0, "end": 32 }, "rank": 32, "alpha": 32 },
+      { "module_path": "transformer_blocks.{block}.attn.to_k",         "blocks": { "start": 0, "end": 32 }, "rank": 32, "alpha": 32 },
+      { "module_path": "transformer_blocks.{block}.attn.to_v",         "blocks": { "start": 0, "end": 32 }, "rank": 32, "alpha": 32 },
+      { "module_path": "transformer_blocks.{block}.attn.to_out.0",    "blocks": { "start": 0, "end": 32 }, "rank": 32, "alpha": 32 },
+      { "module_path": "transformer_blocks.{block}.img_mlp.proj",      "blocks": { "start": 0, "end": 32 }, "rank": 32, "alpha": 32 },
+      { "module_path": "transformer_blocks.{block}.img_mlp.gate_layer", "blocks": { "start": 0, "end": 32 }, "rank": 32, "alpha": 32 },
+      { "module_path": "transformer_blocks.{block}.img_mlp.out",       "blocks": { "start": 0, "end": 32 }, "rank": 32, "alpha": 32 },
+      { "module_path": "time_text_embed.timestep_embedder.linear_1",  "rank": 32, "alpha": 32 },
+      { "module_path": "time_text_embed.timestep_embedder.linear_2",  "rank": 32, "alpha": 32 },
+      { "module_path": "modulation.layers.1",                           "rank": 32, "alpha": 32 }
+    ]
+  }
+}
