@@ -174,3 +174,19 @@ The notes below describe `uv run mflux-generate-qwen-2.1`. The reference-editing
 - Shared VAE and language implementations live under `qwen21/model`. Adapters preserve each command's existing color/shape, normalization, attention, and precision behavior. The text-only encoder does not instantiate a vision tower; editing adds visual tokens and DeepStack and uses the language decoder output before final RMSNorm.
 - Original Hugging Face checkpoints and older text/edit exports remain loadable. The loader translates legacy VAE parameter names without changing tensor values. Text-only exports still omit the vision tower and cannot serve as complete editing checkpoints. Old `qwen21.reference` imports remain available as compatibility exports.
 - Not yet supported: PID decoding.
+
+## Training
+Qwen-Image-2.1 and Qwen-Image-2.1-Turbo support LoRA fine-tuning via `mflux-train`. Start from the example config:
+
+- Base: [`train_qwen_image_21.json`](../common/training/_example/train_qwen_image_21.json) (rank 32, 1024px, 4500 LR steps as `num_epochs x dataset size`; adjust `num_epochs` to your dataset)
+
+For the dataset layout and shared training options, see the common [training docs](../common/README.md#training-lora).
+
+```sh
+uv run mflux-train --config src/mflux/models/common/training/_example/train_qwen_image_21.json
+```
+
+Notes:
+- Training runs the uncached joint forward with gradient checkpointing always on; the fused QK-norm/RoPE kernel, text K/V cache, and packed projections are inference-only and are switched off while gradients are taken.
+- Turbo trains on its fixed 8-node sigma schedule without CFG (`guidance` is forced to 1 for previews); set `"model": "qwen-image-2.1-turbo"` and `"steps": 8`.
+- Saved adapters use the `transformer.` key namespace and load back with `--lora` in either generate command.
