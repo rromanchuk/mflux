@@ -219,3 +219,41 @@ def test_save_lora_adapter_uses_transformer_namespace(monkeypatch, tmp_path):
     assert "transformer.transformer_blocks.0.attn.to_q.lora_A.weight" in weights
     assert "transformer.modulation.layers.1.lora_B.weight" in weights
     assert len(weights) == 2 * (2 + 2 + 1)
+
+
+@pytest.mark.fast
+def test_resume_roundtrip_keeps_lora_layers_trainable(monkeypatch, tmp_path):
+    # Saving then resuming from the saved adapter must leave live LoRA layers behind.
+    # If load_lora_adapter bakes (the load_and_apply_lora default), every LoRA layer is
+    # replaced by a plain nn.Linear, freeze_base() then leaves zero trainable parameters and
+    # the trainer's nn.value_and_grad raises "Must specify at least one argument.".
+    source = _adapter(monkeypatch)
+    _prepare_for_training(source)
+    spec = SimpleNamespace(model="qwen-image-2.1", lora_layers=SimpleNamespace(targets=_targets()))
+    out = tmp_path / "adapter.safetensors"
+    source.save_lora_adapter(path=out, training_spec=spec)
+    saved = mx.load(str(out))
+
+    resumed = _adapter(monkeypatch)
+    resumed.load_lora_adapter(path=out)
+
+    named = dict(resumed.transformer().named_modules())
+    assert isinstance(named["transformer_blocks.0.attn.to_q"], LoRALinear)
+    assert isinstance(named["modulation.layers.1"], LoRALinear)
+    loras = [m for _, m in named.items() if isinstance(m, LoRALinear)]
+    assert len(loras) == 5
+    assert all(getattr(layer, "_mflux_lora_role", None) == "train" for layer in loras)
+
+    # the saved key spelling (model_path) must round-trip, not be silently dropped
+    resumed.save_lora_adapter(path=out, training_spec=spec)
+    resaved = mx.load(str(out))
+    assert resaved.keys() == saved.keys()
+    for key, weight in saved.items():
+        mx.eval(resaved[key], weight)
+        assert mx.array_equal(resaved[key], weight), key
+
+    resumed.freeze_base()
+    TrainingTrainer._unfreeze_lora_layers(resumed.transformer())
+    trainable = tree_flatten(resumed.transformer().trainable_parameters())
+    assert len(trainable) == len(saved)
+    assert all(name.split(".")[-1] in {"lora_A", "lora_B"} for name, _ in trainable)

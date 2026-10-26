@@ -191,21 +191,30 @@ class Qwen21TrainingAdapter(TrainingAdapter):
         )
 
     def load_lora_adapter(self, *, path: str | Path) -> None:
+        # bake_lora=False: baking replaces each LoRA layer with a plain Linear, so a resumed
+        # adapter would leave the trainer with no trainable parameters at all (the trainer
+        # freezes the base first, then unfreezes only LoRA layers) and nn.value_and_grad
+        # would raise "[grad] Must specify at least one argument".
         LoRALoader.load_and_apply_lora(
             lora_mapping=Qwen21LoRAMapping.get_mapping(),
             transformer=self._qwen.transformer,
             lora_paths=[str(path)],
             lora_scales=[1.0],
             role="train",
+            bake_lora=False,
         )
 
     def load_training_adapter(self, *, path: str | Path, scale: float = 1.0) -> None:
+        # bake_lora=False: a baked assistant is folded into the base weights, so it cannot be
+        # switched back off after training and the trained LoRA would be trained against a
+        # base that inference does not have.
         LoRALoader.load_and_apply_lora(
             lora_mapping=Qwen21LoRAMapping.get_mapping(),
             transformer=self._qwen.transformer,
             lora_paths=[str(path)],
             lora_scales=[float(scale)],
             role="assistant",
+            bake_lora=False,
         )
 
     def _assistant_disabled(self):
