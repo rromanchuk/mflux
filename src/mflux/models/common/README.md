@@ -31,7 +31,9 @@ This README covers stable, shared patterns. For model-specific usage, see each m
 
 ## Quantization
 
-Quantization reduces memory use and speeds up inference. Most models support `--quantize` (3, 4, 5, 6, 8). This is the on-the-fly option, and quantization is performed as weights are loaded.
+Quantization reduces memory use and speeds up inference. Most models support `--quantize` (3, 4, 5, 6, 8).
+
+For most built-in models, `--quantize N` loads the pre-quantized `mflux-community/<model>-mflux-q<N>` repo, a much smaller download than the upstream bf16 weights. The upstream weights are still used, and quantized as they load, when they are already fully in your Hugging Face cache, when a LoRA is baked in (the bake needs the bf16 weights), when the org has no repo at that level, for `mflux-train` and `mflux-save`, and for a local path or a third-party `--model`. The log line `Weights: ...` says which one was loaded and why.
 
 ```sh
 mflux-generate-z-image-turbo \
@@ -272,7 +274,7 @@ image.save("prompt_file.png")
 
 ## LoRA basics
 
-By default, LoRA and LoKr weights are **baked** into the base model after load (one-time merge) so inference uses a single matmul per layer. MOSS-Image is the exception: it keeps runtime adapter layers unless you pass `--bake-lora`, because most of the update of its step-distilled LoRAs is under half a bfloat16 step of the weights (see the [MOSS-Image README](../moss_image/README.md#lora)). With `--quantize` on FLUX, FLUX.2, FLUX 3 Image Klein, Qwen-Image, Krea 2, Z-Image and MOSS-Image, a checkpoint that stores full-precision weights gets the adapter added to those weights, in float32, before they are quantized. Elsewhere, and whenever the checkpoint is already quantized, the adapter is merged into the dequantized weights and the result is re-quantized. On that route, the bake re-quantizes each layer below 8 bits at q8. A LoRA on a saved q4 checkpoint thus gives q8 layers, while `-q 4` on a full-precision checkpoint keeps them at q4. A weak adapter at a low scale loses part of its effect that way: one Z-Image LoRA at scale 0.5 came out at 80% of its strength on q8 ([#814](https://github.com/mflux-community/mflux/issues/814)). A bfloat16 weight rounds a small update the same way: the Viggle turbo LoRA for Qwen-Image-2.1 keeps 66% of its update baked into bfloat16 and 42% on `-q 8`. The bake prints the share of the update it kept when that is under 90%; layers with a LoKr adapter are left out of that count. Use `--no-bake-lora` to keep runtime adapter layers: they apply the adapter in full on any checkpoint, they cost speed and memory, and they let you change scales programmatically without reloading.
+By default, LoRA and LoKr weights are **baked** into the base model after load (one-time merge) so inference uses a single matmul per layer. MOSS-Image and SenseNova-U1.5 are the exceptions: they keep runtime adapter layers unless you pass `--bake-lora`, because a merge into bfloat16 weights loses part of the update of their step-distilled LoRAs (see the [MOSS-Image README](../moss_image/README.md#lora) and the [SenseNova-U1.5 README](../sensenova/README.md#8-step-lora)). With `--quantize` on FLUX, FLUX.2, FLUX 3 Image Klein, Qwen-Image, Krea 2, Z-Image, MOSS-Image and SenseNova-U1.5, a checkpoint that stores full-precision weights gets the adapter added to those weights, in float32, before they are quantized. Elsewhere, and whenever the checkpoint is already quantized, the adapter is merged into the dequantized weights and the result is re-quantized. On that route, the bake re-quantizes each layer below 8 bits at q8. A LoRA on a saved q4 checkpoint thus gives q8 layers, while `-q 4` on a full-precision checkpoint keeps them at q4. A weak adapter at a low scale loses part of its effect that way: one Z-Image LoRA at scale 0.5 came out at 80% of its strength on q8 ([#814](https://github.com/mflux-community/mflux/issues/814)). A bfloat16 weight rounds a small update the same way: the Viggle turbo LoRA for Qwen-Image-2.1 keeps 66% of its update baked into bfloat16 and 42% on `-q 8`. The bake prints the share of the update it kept when that is under 90%; layers with a LoKr adapter are left out of that count. Use `--no-bake-lora` to keep runtime adapter layers: they apply the adapter in full on any checkpoint, they cost speed and memory, and they let you change scales programmatically without reloading.
 
 ```sh
 mflux-generate-z-image-turbo \
@@ -338,7 +340,7 @@ image.save("portrait_hf_lora.png")
 ```
 </details>
 
-For multi-LoRA, pass multiple paths and scales. For library usage, set `LORA_LIBRARY_PATH` and pass basenames.
+For multi-LoRA, pass multiple paths and scales. For library usage, set `LORA_LIBRARY_PATH` and pass basenames. When two files have the same name, `--lora <name>` takes the file in the first directory (in one directory, the first file in sorted order) and prints a warning; pass the full path to use the other one. `mflux-lora-library list` shows each file with its path in the library, and `--json` gives the same list for scripts.
 
 A LoRA's strength is `lora_alpha / rank`. mflux reads `lora_alpha` from per-layer `.alpha` tensors (kohya, ComfyUI) or, for files saved by diffusers or PEFT, from the `lora_adapter_metadata` the file carries, including per-layer `alpha_pattern` values and rsLoRA (`lora_alpha / sqrt(rank)`). A file with neither loads at `lora_alpha = rank`, a strength of 1.
 
@@ -817,7 +819,7 @@ Use the model READMEs for exact command names and options. General utilities tha
 - **Training**: `mflux-train`
 - **Utilities**: `mflux-save-depth`
 
-For model-specific generation commands (Flux, Flux2, Flux3, Iris, Qwen, Z-Image, FIBO) and specialized features (ControlNet, depth, fill, Redux, in-context editing, kontext, concept attention, upscaling), see the respective model READMEs and the top-level `README.md`.
+For model-specific generation commands (Flux, Flux2, Flux3, Iris, SenseNova, Qwen, Z-Image, FIBO) and specialized features (ControlNet, depth, fill, Redux, in-context editing, kontext, concept attention, upscaling), see the respective model READMEs and the top-level `README.md`.
 
 ---
 

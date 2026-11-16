@@ -6,18 +6,23 @@ from mflux.callbacks.callback_registry import CallbackRegistry
 from mflux.models.common.compute_precision import ComputePrecision
 from mflux.models.common.config import ModelConfig
 from mflux.models.common.lora.mapping.lora_loader import LoRALoader
+from mflux.models.common.resolution.prequantized_resolution import PrequantizedResolution
 from mflux.models.common.tokenizer import TokenizerLoader
 from mflux.models.common.vae.block_decoder import VAEBlockDecoder
 from mflux.models.common.weights.loading.loaded_weights import LoadedWeights
 from mflux.models.common.weights.loading.weight_applier import WeightApplier
 from mflux.models.common.weights.loading.weight_loader import WeightLoader
+from mflux.models.z_image.model.z_image_text_encoder.small_text_encoder import ZImageSmallTextEncoder
 from mflux.models.z_image.model.z_image_text_encoder.text_encoder import TextEncoder
 from mflux.models.z_image.model.z_image_transformer.transformer import ZImageTransformer
 from mflux.models.z_image.model.z_image_vae.vae import VAE
 from mflux.models.z_image.variants.controlnet.transformer_controlnet import ZImageControlNet, ZImageControlNetConfig
 from mflux.models.z_image.weights.z_image_controlnet_weight_definition import ZImageControlnetWeightDefinition
 from mflux.models.z_image.weights.z_image_lora_mapping import ZImageLoRAMapping
-from mflux.models.z_image.weights.z_image_weight_definition import ZImageWeightDefinition
+from mflux.models.z_image.weights.z_image_weight_definition import (
+    ZImageNoTextEncoderWeightDefinition,
+    ZImageWeightDefinition,
+)
 
 
 class ZImageInitializer:
@@ -32,14 +37,31 @@ class ZImageInitializer:
         bake_lora: bool = True,
         float32: bool = False,
         compute_precision: mx.Dtype | None = None,
+        small_text_encoder: bool = False,
     ) -> None:
+        if small_text_encoder:
+            ZImageInitializer.validate_small_text_encoder(model_config)
         precision = ComputePrecision(compute_precision)
-        path = model_path if model_path else model_config.model_name
+        definition = ZImageNoTextEncoderWeightDefinition if small_text_encoder else ZImageWeightDefinition
+        path = PrequantizedResolution.weights_root(
+            model_config,
+            model_path,
+            quantize,
+            has_loras=bool(lora_paths),
+            bake_lora=bake_lora,
+            **PrequantizedResolution.layout(definition),
+        )
         ZImageInitializer._init_config(model, model_config)
-        weights = ZImageInitializer._load_weights(path)
+        model.small_text_encoder = small_text_encoder
+        if small_text_encoder:
+            weights = ZImageInitializer._load_weights_without_text_encoder(path)
+        else:
+            weights = ZImageInitializer._load_weights(path)
         ZImageInitializer._init_tokenizers(model, path)
         ZImageInitializer._init_models(model)
         ZImageInitializer._apply_weights(model, weights, quantize)
+        if small_text_encoder:
+            model.text_encoder = ZImageSmallTextEncoder.load(bits=model.bits)
         ZImageInitializer._apply_lora(model, lora_paths, lora_scales, bake_lora, weights)
         model.float32 = float32
         model.transformer.set_float32(float32)
@@ -47,6 +69,16 @@ class ZImageInitializer:
         if compute_precision is not None:
             # Last, so it casts the final parameters, whatever quantization and LoRA produced.
             model.transformer.apply_compute_precision(precision)
+
+    @staticmethod
+    def supports_small_text_encoder(model_config: ModelConfig) -> bool:
+        # Compared by identity: the ControlNet entry shares the Turbo repo id.
+        return model_config is ModelConfig.z_image_turbo()
+
+    @staticmethod
+    def validate_small_text_encoder(model_config: ModelConfig) -> None:
+        if not ZImageInitializer.supports_small_text_encoder(model_config):
+            raise ValueError("--small-text-encoder only works with Z-Image-Turbo.")
 
     @staticmethod
     def _init_config(model, model_config: ModelConfig) -> None:
@@ -62,6 +94,13 @@ class ZImageInitializer:
         )
 
     @staticmethod
+    def _load_weights_without_text_encoder(model_path: str) -> LoadedWeights:
+        return WeightLoader.load(
+            weight_definition=ZImageNoTextEncoderWeightDefinition,
+            model_path=model_path,
+        )
+
+    @staticmethod
     def _init_tokenizers(model, model_path: str) -> None:
         model.tokenizers = TokenizerLoader.load_all(
             definitions=ZImageWeightDefinition.get_tokenizers(),
@@ -73,20 +112,27 @@ class ZImageInitializer:
         model.vae = VAE()
         model.vae.decode_mode = VAEBlockDecoder.LOW_MEMORY
         model.transformer = ZImageTransformer()
-        model.text_encoder = TextEncoder()
+        model.text_encoder = None
+        if not model.small_text_encoder:
+            model.text_encoder = TextEncoder()
 
     @staticmethod
     def _apply_weights(model, weights: LoadedWeights, quantize: int | None) -> None:
         model.bits = WeightApplier.apply_and_quantize(
             weights=weights,
             quantize_arg=quantize,
-            weight_definition=ZImageWeightDefinition,
-            models={
-                "vae": model.vae,
-                "transformer": model.transformer,
-                "text_encoder": model.text_encoder,
-            },
+            weight_definition=ZImageNoTextEncoderWeightDefinition
+            if model.small_text_encoder
+            else ZImageWeightDefinition,
+            models=ZImageInitializer._weighted_models(model),
         )
+
+    @staticmethod
+    def _weighted_models(model) -> dict:
+        models = {"vae": model.vae, "transformer": model.transformer}
+        if not model.small_text_encoder:
+            models["text_encoder"] = model.text_encoder
+        return models
 
     @staticmethod
     def init_controlnet(

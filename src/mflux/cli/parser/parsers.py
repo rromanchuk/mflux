@@ -290,7 +290,7 @@ class CommandLineParser(argparse.ArgumentParser):
         self.add_argument("--pid-degrade-sigma", type=float, default=0.0, help="With --pid-decode, deliberately noise the latent to this flow-matching sigma before decoding (0.0-0.8). PiD's LQ gate was distilled on latents noised at sigma~U[0.0, 0.8]; a fully clean latent (the default, sigma=0.0) is the input it saw least during training, which can show up as over-textured detail invented on smooth areas like skin. Try 0.2 if you see that. Ignored without --pid-decode.")
 
     def add_small_text_encoder_arguments(self, help_text: str | None = None) -> None:
-        self.add_argument("--small-text-encoder", action=argparse.BooleanOptionalAction, default=False, help=help_text or "[EXPERIMENTAL] Replace klein-4B's Qwen3-4B text encoder with Qwen3-0.6B + the AiArtLab/qwen3-0.6b-4b-adapter (FLUX.2-klein-4B / klein-base-4B only). Needs 1-5.6 GB less memory for weights depending on -q and downloads ~2.3 GB instead of ~7.5 GB; prompts are capped at 256 tokens and fine details can drift from the native encoder.")
+        self.add_argument("--small-text-encoder", action=argparse.BooleanOptionalAction, default=False, help=help_text or "[EXPERIMENTAL] Replace klein-4B's Qwen3-4B text encoder with Qwen3-0.6B + the AiArtLab/qwen3-0.6b-4b-adapter (FLUX.2-klein-4B / klein-base-4B only). Needs 1-6 GB less memory for weights depending on -q and downloads ~2.4 GB instead of ~8.0 GB; prompts are capped at 256 tokens and fine details can drift from the native encoder.")
 
     def add_vae_full_precision_arguments(self) -> None:
         self.add_argument("--vae-full-precision", action=argparse.BooleanOptionalAction, default=False, help="Decode each VAE block on the full image in fp32, as the earlier decode did, not in bf16 row strips. The decode needs more memory (8.6 GB at 1024x1024, compared with 1.6 GB).")
@@ -485,8 +485,10 @@ class CommandLineParser(argparse.ArgumentParser):
                 # a path or third-party repo records that source in model_path, and the
                 # source is what the command line actually said, so it wins over the
                 # resolved registry entry in "model" (#705); older sidecars carry only the
-                # entry and restore as before.
-                restored_weights_source = prior_gen_metadata.get("model_path")
+                # entry and restore as before. A run redirected to a pre-quantized repo
+                # records that repo in weights_repo and no model_path; restoring only the
+                # entry would replay it as an upstream repo id and load the bf16 weights (#938).
+                restored_weights_source = prior_gen_metadata.get("model_path") or prior_gen_metadata.get("weights_repo")
                 namespace.model = restored_weights_source or prior_gen_metadata.get("model", namespace.model)
 
             if namespace.base_model is None:

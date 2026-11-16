@@ -30,6 +30,8 @@ class ModelConfig:
         lora_training_steps: int | None = None,
         lora_training_guidance: float | None = None,
         supports_kv_cache: bool = False,
+        mflux_repo_stem: str | None = None,
+        mflux_repo_missing: tuple[str, ...] = (),
     ):
         self.aliases = aliases
         self.model_name = model_name
@@ -51,6 +53,9 @@ class ModelConfig:
         self.lora_training_steps = lora_training_steps
         self.lora_training_guidance = lora_training_guidance
         self.supports_kv_cache = supports_kv_cache
+        # mflux-community/<stem>-mflux-q<N>, loaded with -q N (#938); levels the org has no repo for
+        self.mflux_repo_stem = mflux_repo_stem
+        self.mflux_repo_missing = mflux_repo_missing
 
     @staticmethod
     @lru_cache
@@ -151,6 +156,11 @@ class ModelConfig:
     @lru_cache
     def iris_3b_base() -> "ModelConfig":
         return AVAILABLE_MODELS["iris-3b-base"]
+
+    @staticmethod
+    @lru_cache
+    def sensenova_u15() -> "ModelConfig":
+        return AVAILABLE_MODELS["sensenova-u1.5"]
 
     @staticmethod
     @lru_cache
@@ -350,6 +360,7 @@ AVAILABLE_MODELS = {
         # base/max image seq len 256/6400, exponential dynamic shifting.
         sigma_max_shift=1.15,
         sigma_max_seq_len=6400,
+        mflux_repo_stem="krea-2-turbo",
     ),
     "krea-2-raw": ModelConfig(
         # Krea 2 Raw: the base checkpoint. Krea recommends it as the base for finetuning /
@@ -366,6 +377,7 @@ AVAILABLE_MODELS = {
         requires_sigma_shift=True,
         sigma_max_shift=1.15,
         sigma_max_seq_len=6400,
+        mflux_repo_stem="krea-2-raw",
     ),
     "krea-2-controlnet-depth": ModelConfig(
         # Krea 2 Turbo with Tanmay Patil's depth ControlNet merged into it at load.
@@ -393,6 +405,7 @@ AVAILABLE_MODELS = {
         max_sequence_length=512,
         supports_guidance=True,
         requires_sigma_shift=True,
+        mflux_repo_stem="flux-1-dev",
     ),
     "schnell": ModelConfig(
         priority=1,
@@ -405,6 +418,7 @@ AVAILABLE_MODELS = {
         max_sequence_length=256,
         supports_guidance=False,
         requires_sigma_shift=False,
+        mflux_repo_stem="flux-1-schnell",
     ),
     "dev-kontext": ModelConfig(
         priority=2,
@@ -417,6 +431,7 @@ AVAILABLE_MODELS = {
         max_sequence_length=512,
         supports_guidance=True,
         requires_sigma_shift=True,
+        mflux_repo_stem="flux-1-dev-kontext",
     ),
     "dev-fill": ModelConfig(
         priority=3,
@@ -429,6 +444,7 @@ AVAILABLE_MODELS = {
         max_sequence_length=512,
         supports_guidance=True,
         requires_sigma_shift=True,
+        mflux_repo_stem="flux-1-dev-fill",
     ),
     "dev-redux": ModelConfig(
         priority=4,
@@ -453,6 +469,8 @@ AVAILABLE_MODELS = {
         max_sequence_length=512,
         supports_guidance=True,
         requires_sigma_shift=True,
+        mflux_repo_stem="flux-1-dev-depth",
+        mflux_repo_missing=("q4", "q5"),
     ),
     "dev-controlnet-canny": ModelConfig(
         priority=6,
@@ -513,6 +531,7 @@ AVAILABLE_MODELS = {
         max_sequence_length=512,
         supports_guidance=True,
         requires_sigma_shift=True,
+        mflux_repo_stem="flux-1-krea-dev",
     ),
     "flux2-klein-4b": ModelConfig(
         priority=11,
@@ -535,6 +554,7 @@ AVAILABLE_MODELS = {
             "hidden_size": 2560,
             "intermediate_size": 9728,
         },
+        mflux_repo_stem="flux2-klein-4b",
     ),
     "flux3-image-klein": ModelConfig(
         priority=11,
@@ -553,6 +573,7 @@ AVAILABLE_MODELS = {
             "num_hidden_layers": 32,
             "rope_theta": 5000000.0,
         },
+        mflux_repo_stem="flux-3-image-klein",
     ),
     "flux3-image-klein-base": ModelConfig(
         priority=11,
@@ -572,6 +593,7 @@ AVAILABLE_MODELS = {
             "num_hidden_layers": 32,
             "rope_theta": 5000000.0,
         },
+        mflux_repo_stem="flux-3-image-klein-base",
     ),
     "iris-3b": ModelConfig(
         priority=35,
@@ -609,6 +631,18 @@ AVAILABLE_MODELS = {
             "rope_theta": 5000000.0,
         },
     ),
+    "sensenova-u1.5": ModelConfig(
+        priority=42,
+        aliases=["sensenova-u1.5", "sensenova-u1.5-8b-mot", "sensenova"],
+        model_name="sensenova/SenseNova-U1.5-8B-MoT",
+        base_model=None,
+        controlnet_model=None,
+        custom_transformer_model=None,
+        num_train_steps=1000,
+        max_sequence_length=None,
+        supports_guidance=True,
+        requires_sigma_shift=False,
+    ),
     "flux2-klein-9b": ModelConfig(
         priority=12,
         aliases=["flux2-klein-9b", "flux2-klein-9B", "klein-9b", "klein-9B"],
@@ -630,6 +664,7 @@ AVAILABLE_MODELS = {
             "hidden_size": 4096,
             "intermediate_size": 12288,
         },
+        mflux_repo_stem="flux2-klein-9b",
     ),
     "flux2-klein-9b-kv": ModelConfig(
         priority=12,
@@ -659,6 +694,7 @@ AVAILABLE_MODELS = {
             "intermediate_size": 12288,
         },
         supports_kv_cache=True,
+        mflux_repo_stem="flux2-klein-9b-kv",
     ),
     "flux2-klein-base-4b": ModelConfig(
         priority=13,
@@ -688,6 +724,7 @@ AVAILABLE_MODELS = {
             "hidden_size": 2560,
             "intermediate_size": 9728,
         },
+        mflux_repo_stem="flux-2-klein-base-4b",
     ),
     "flux2-klein-base-9b": ModelConfig(
         priority=14,
@@ -717,6 +754,7 @@ AVAILABLE_MODELS = {
             "hidden_size": 4096,
             "intermediate_size": 12288,
         },
+        mflux_repo_stem="flux-2-klein-base-9b",
     ),
     "qwen-image": ModelConfig(
         priority=15,
@@ -732,6 +770,7 @@ AVAILABLE_MODELS = {
         sigma_max_shift=0.9,
         sigma_max_seq_len=8192,
         sigma_shift_terminal=0.02,
+        mflux_repo_stem="qwen-image-2512",
     ),
     "qwen-image-edit": ModelConfig(
         priority=16,
@@ -752,6 +791,7 @@ AVAILABLE_MODELS = {
         sigma_max_shift=0.9,
         sigma_max_seq_len=8192,
         sigma_shift_terminal=0.02,
+        mflux_repo_stem="qwen-image-edit-2509",
     ),
     "qwen-image-edit-2511": ModelConfig(
         # Same schedule as 2509. Its transformer config sets zero_cond_t: the reference-image tokens are
@@ -770,6 +810,7 @@ AVAILABLE_MODELS = {
         sigma_max_shift=0.9,
         sigma_max_seq_len=8192,
         sigma_shift_terminal=0.02,
+        mflux_repo_stem="qwen-image-edit-2511",
     ),
     "fibo": ModelConfig(
         priority=17,
@@ -830,6 +871,7 @@ AVAILABLE_MODELS = {
         max_sequence_length=4096,
         supports_guidance=True,
         requires_sigma_shift=False,
+        mflux_repo_stem="fibo-2-0-dev",
     ),
     "fibo2-edit-turbo": ModelConfig(
         priority=39,
@@ -842,6 +884,7 @@ AVAILABLE_MODELS = {
         max_sequence_length=4096,
         supports_guidance=False,
         requires_sigma_shift=False,
+        mflux_repo_stem="fibo-2-0-edit-turbo",
     ),
     "z-image": ModelConfig(
         priority=20,
@@ -854,6 +897,7 @@ AVAILABLE_MODELS = {
         max_sequence_length=512,
         supports_guidance=True,
         requires_sigma_shift=True,
+        mflux_repo_stem="z-image-base",
     ),
     "ming-image-design": ModelConfig(
         priority=30,
@@ -907,6 +951,7 @@ AVAILABLE_MODELS = {
         max_sequence_length=512,
         supports_guidance=False,  # Turbo model uses guidance_scale=0
         requires_sigma_shift=True,
+        mflux_repo_stem="z-image-turbo",
     ),
     "seedvr2-3b": ModelConfig(
         priority=22,
@@ -936,6 +981,7 @@ AVAILABLE_MODELS = {
         lora_training_steps=50,
         lora_training_guidance=4.0,
         transformer_overrides={"rope_axes_dim": [32, 48, 48]},
+        mflux_repo_stem="ernie-image-base",
     ),
     "ernie-image-turbo": ModelConfig(
         priority=26,
@@ -953,6 +999,7 @@ AVAILABLE_MODELS = {
         lora_training_steps=8,
         lora_training_guidance=1.0,
         transformer_overrides={"rope_axes_dim": [32, 48, 48]},
+        mflux_repo_stem="ernie-image-turbo",
     ),
     "qwen-image-2.1-turbo-controlnet-union": ModelConfig(
         # The Turbo checkpoint with the Fun ControlNet-Union branch beside it. alibaba-pai trained the
@@ -1025,6 +1072,7 @@ AVAILABLE_MODELS = {
         max_sequence_length=1024,
         supports_guidance=False,
         requires_sigma_shift=False,
+        mflux_repo_stem="boogu-image-turbo",
     ),
     "moss-image-sft": ModelConfig(
         priority=37,
@@ -1037,6 +1085,7 @@ AVAILABLE_MODELS = {
         max_sequence_length=4096,
         supports_guidance=True,
         requires_sigma_shift=False,
+        mflux_repo_stem="moss-image-sft",
     ),
     "moss-image-base": ModelConfig(
         # The same architecture, text encoder and VAE as SFT. Only the transformer weights differ.
@@ -1121,6 +1170,9 @@ AVAILABLE_MODELS = {
         max_sequence_length=4096,
         supports_guidance=True,
         requires_sigma_shift=False,
+        mflux_repo_stem="anima-turbo",
+        # AnimaInitializer rejects -q 3 before the lookup; kept so the org listing test checks the level
+        mflux_repo_missing=("q3",),
     ),
     "anima-aesthetic": ModelConfig(
         priority=40,
@@ -1133,6 +1185,9 @@ AVAILABLE_MODELS = {
         max_sequence_length=4096,
         supports_guidance=True,
         requires_sigma_shift=False,
+        mflux_repo_stem="anima-aesthetic",
+        # AnimaInitializer rejects -q 3 before the lookup; kept so the org listing test checks the level
+        mflux_repo_missing=("q3",),
     ),
     "anima-base": ModelConfig(
         priority=41,
@@ -1145,5 +1200,8 @@ AVAILABLE_MODELS = {
         max_sequence_length=4096,
         supports_guidance=True,
         requires_sigma_shift=False,
+        mflux_repo_stem="anima-base",
+        # AnimaInitializer rejects -q 3 before the lookup; kept so the org listing test checks the level
+        mflux_repo_missing=("q3",),
     ),
 }

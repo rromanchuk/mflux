@@ -8,6 +8,7 @@ from mflux.models.common.config import ModelConfig
 from mflux.models.common.config.model_config import AVAILABLE_MODELS
 from mflux.models.common.resolution.config_resolution import ConfigResolution
 from mflux.models.common.resolution.lora_resolution import LoraResolution
+from mflux.models.common.resolution.prequantized_resolution import PrequantizedResolution
 from mflux.models.common.resolution.quantization_resolution import QuantizationResolution
 from mflux.models.common.weights.saving.hf_cache_alias import HfCacheAlias
 from mflux.models.common.weights.saving.saved_model_info import SavedModelInfo, SaveTarget
@@ -32,6 +33,7 @@ from mflux.models.qwen.variants.txt2img.qwen_image import QwenImage
 from mflux.models.qwen21.variants.controlnet.qwen_image_21_controlnet import QwenImage21Controlnet
 from mflux.models.qwen21.variants.edit.qwen_image_21_edit import QwenImage21Edit
 from mflux.models.seedvr2.variants.upscale.seedvr2 import SeedVR2
+from mflux.models.sensenova.variants.txt2img.sensenova import SenseNova
 from mflux.models.z_image import ZImage, ZImageTurbo, ZImageTurboControlnet
 from mflux.utils.exceptions import ModelConfigError
 
@@ -91,6 +93,7 @@ MODEL_CLASSES: dict[str, type] = {
     "qwen-image-edit-2511": QwenImageEdit,
     "schnell": Flux1,
     "schnell-controlnet-canny": Flux1Controlnet,
+    "sensenova-u1.5": SenseNova,
     "seedvr2-3b": SeedVR2,
     "seedvr2-7b": SeedVR2,
     "z-image": ZImage,
@@ -149,6 +152,12 @@ class SaveDispatch:
 
 
 def main():
+    # Saving keeps the upstream weights in this release (#938)
+    with PrequantizedResolution.disabled():
+        _main()
+
+
+def _main():
     # 0. Parse command line arguments
     parser = CommandLineParser(description="Save a quantized version of a model to disk.")  # fmt: off
     parser.add_model_arguments(path_type="save", require_model_arg=True)
