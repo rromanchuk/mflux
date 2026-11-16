@@ -1,5 +1,5 @@
 {
-  "model": "qwen-image-2.1",
+  "model": "qwen-image-2.1-forked",
   "model_path": null,
   "data": "/path/to/your/dataset",
   "seed": 42,
@@ -25,7 +25,7 @@
     "max_grad_norm": 1.0
   },
   "checkpoint": {
-    "output_path": "train_qwen_image_21",
+    "output_path": "train_qwen_image_21_forked",
     "save_frequency": 500
   },
   "monitoring": {

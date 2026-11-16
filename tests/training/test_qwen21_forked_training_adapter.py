@@ -12,9 +12,9 @@ from mflux.models.common.training.lora.target_injector import inject_lora_target
 from mflux.models.common.training.state.training_spec import BlockRange, LoraTargetSpec
 from mflux.models.common.training.trainer import TrainingTrainer
 from mflux.models.qwen21.model.qwen21_transformer.qwen21_transformer import Qwen21Transformer
-from mflux.models.qwen21.training_adapter import qwen21_training_adapter as adapter_module
+from mflux.models.qwen21.training_adapter import qwen21_forked_training_adapter as adapter_module
 
-Qwen21TrainingAdapter = adapter_module.Qwen21TrainingAdapter
+Qwen21ForkedTrainingAdapter = adapter_module.Qwen21ForkedTrainingAdapter
 
 HEIGHT = WIDTH = 64  # 4x4 = 16 image tokens
 TXT_TOKENS = 6
@@ -59,9 +59,9 @@ class _FakeQwenImage21(nn.Module):
         return "preview-image"
 
 
-def _adapter(monkeypatch, model_config=None) -> Qwen21TrainingAdapter:
+def _adapter(monkeypatch, model_config=None) -> Qwen21ForkedTrainingAdapter:
     monkeypatch.setattr(adapter_module, "QwenImage21", _FakeQwenImage21)
-    return Qwen21TrainingAdapter(model_config=model_config or ModelConfig.qwen_image_21(), quantize=None)
+    return Qwen21ForkedTrainingAdapter(model_config=model_config or ModelConfig.qwen_image_21(), quantize=None)
 
 
 def _targets() -> list[LoraTargetSpec]:
@@ -76,7 +76,7 @@ def _targets() -> list[LoraTargetSpec]:
     ]
 
 
-def _prepare_for_training(adapter: Qwen21TrainingAdapter) -> None:
+def _prepare_for_training(adapter: Qwen21ForkedTrainingAdapter) -> None:
     # same order as the runner/trainer: inject -> freeze_base -> unfreeze LoRA -> checkpointing
     inject_lora_targets(adapter.transformer(), _targets())
     adapter.freeze_base()
@@ -98,9 +98,27 @@ def _cond(padded: bool) -> dict:
     return {"embeds": embeds, "mask": mask}
 
 
-def _config(adapter: Qwen21TrainingAdapter) -> Config:
+def _config(adapter: Qwen21ForkedTrainingAdapter) -> Config:
     spec = SimpleNamespace(steps=8, guidance=1.0)
     return adapter.create_config(training_spec=spec, width=WIDTH, height=HEIGHT)
+
+
+@pytest.mark.fast
+def test_forked_model_names_select_the_fork_and_resolve_to_the_base_model():
+    assert Qwen21ForkedTrainingAdapter.is_forked_model("qwen-image-2.1-forked")
+    assert Qwen21ForkedTrainingAdapter.is_forked_model("qwen-image-2.1-turbo-forked")
+    # the plain names belong to upstream's Qwen21TrainingAdapter
+    assert not Qwen21ForkedTrainingAdapter.is_forked_model("qwen-image-2.1")
+    assert not Qwen21ForkedTrainingAdapter.is_forked_model("qwen-image-2.1-turbo")
+    assert Qwen21ForkedTrainingAdapter.base_model_name("qwen-image-2.1-forked") == "qwen-image-2.1"
+    assert Qwen21ForkedTrainingAdapter.base_model_name("qwen-image-2.1-turbo-forked") == "qwen-image-2.1-turbo"
+    assert Qwen21ForkedTrainingAdapter.base_model_name("z-image") == "z-image"
+    for model in Qwen21ForkedTrainingAdapter.FORKED_MODELS:
+        resolved = ModelConfig.from_name(Qwen21ForkedTrainingAdapter.base_model_name(model))
+        assert resolved.model_name in {
+            ModelConfig.qwen_image_21().model_name,
+            ModelConfig.qwen_image_21_turbo().model_name,
+        }
 
 
 @pytest.mark.fast
@@ -212,7 +230,7 @@ def test_turbo_preview_uses_turbo_schedule_without_cfg(monkeypatch):
 def test_save_lora_adapter_uses_transformer_namespace(monkeypatch, tmp_path):
     adapter = _adapter(monkeypatch)
     _prepare_for_training(adapter)
-    spec = SimpleNamespace(model="qwen-image-2.1", lora_layers=SimpleNamespace(targets=_targets()))
+    spec = SimpleNamespace(model="qwen-image-2.1-forked", lora_layers=SimpleNamespace(targets=_targets()))
     out = tmp_path / "adapter.safetensors"
     adapter.save_lora_adapter(path=out, training_spec=spec)
     weights = mx.load(str(out))
@@ -229,7 +247,7 @@ def test_resume_roundtrip_keeps_lora_layers_trainable(monkeypatch, tmp_path):
     # the trainer's nn.value_and_grad raises "Must specify at least one argument.".
     source = _adapter(monkeypatch)
     _prepare_for_training(source)
-    spec = SimpleNamespace(model="qwen-image-2.1", lora_layers=SimpleNamespace(targets=_targets()))
+    spec = SimpleNamespace(model="qwen-image-2.1-forked", lora_layers=SimpleNamespace(targets=_targets()))
     out = tmp_path / "adapter.safetensors"
     source.save_lora_adapter(path=out, training_spec=spec)
     saved = mx.load(str(out))

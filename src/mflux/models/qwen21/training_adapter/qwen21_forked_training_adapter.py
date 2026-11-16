@@ -21,8 +21,12 @@ from mflux.models.qwen21.weights.qwen21_lora_mapping import Qwen21LoRAMapping
 from mflux.utils.version_util import VersionUtil
 
 
-class Qwen21TrainingAdapter(TrainingAdapter):
-    """LoRA training adapter for Qwen-Image-2.1 (base and Turbo).
+class Qwen21ForkedTrainingAdapter(TrainingAdapter):
+    """This fork's LoRA training adapter for Qwen-Image-2.1 (base and Turbo).
+
+    Upstream's adapter is ``Qwen21TrainingAdapter`` and serves the plain model names. A training
+    config selects this one with ``"model": "qwen-image-2.1-forked"`` or
+    ``"qwen-image-2.1-turbo-forked"``.
 
     Training is plain flow matching, like Krea 2: the trainer noises a latent with
     z = (1 - sigma) * clean + sigma * noise and the target velocity is noise - clean, which is what
@@ -37,6 +41,20 @@ class Qwen21TrainingAdapter(TrainingAdapter):
       LoRAs would receive zero gradient.
     - ``inference_projections()``: packs Q/K/V into one weight and routes around injected LoRA layers.
     """
+
+    FORKED_MODEL_SUFFIX = "-forked"
+    FORKED_MODELS = frozenset({"qwen-image-2.1-forked", "qwen-image-2.1-turbo-forked"})
+
+    @staticmethod
+    def is_forked_model(model: str) -> bool:
+        return model in Qwen21ForkedTrainingAdapter.FORKED_MODELS
+
+    @staticmethod
+    def base_model_name(model: str) -> str:
+        # "qwen-image-2.1-forked" -> "qwen-image-2.1"; any other name is returned unchanged
+        if Qwen21ForkedTrainingAdapter.is_forked_model(model):
+            return model.removesuffix(Qwen21ForkedTrainingAdapter.FORKED_MODEL_SUFFIX)
+        return model
 
     def __init__(self, *, model_config: ModelConfig, quantize: int | None, model_path: str | None = None):
         self._model_config = model_config

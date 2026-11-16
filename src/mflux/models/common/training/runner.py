@@ -29,7 +29,6 @@ from mflux.models.flux2.training_adapter.flux2_edit_training_adapter import Flux
 from mflux.models.flux2.training_adapter.flux2_training_adapter import Flux2TrainingAdapter
 from mflux.models.iris.training_adapter.iris_training_adapter import IrisTrainingAdapter
 from mflux.models.krea2.training_adapter.krea2_training_adapter import Krea2TrainingAdapter
-from mflux.models.qwen21.training_adapter.qwen21_training_adapter import Qwen21TrainingAdapter
 from mflux.models.z_image.training_adapter.z_image_training_adapter import ZImageTrainingAdapter
 from mflux.utils.exceptions import StopTrainingException
 from mflux.utils.exif_orientation import oriented_size
@@ -88,7 +87,12 @@ class TrainingRunner:
         # Set global seed for MLX randomness
         mx_random.seed(training_spec.seed)
 
-        model_config = ModelConfig.from_name(training_spec.model)
+        # Fork: "qwen-image-2.1-forked" and "qwen-image-2.1-turbo-forked" train with this fork's adapter. Imported
+        # here, not at the top, so the import block stays the same as upstream's and merges without a conflict.
+        from mflux.models.qwen21.training_adapter.qwen21_forked_training_adapter import Qwen21ForkedTrainingAdapter
+
+        is_qwen21_forked = Qwen21ForkedTrainingAdapter.is_forked_model(training_spec.model)
+        model_config = ModelConfig.from_name(Qwen21ForkedTrainingAdapter.base_model_name(training_spec.model))
         is_zimage_turbo = model_config.model_name == ModelConfig.z_image_turbo().model_name
         is_zimage = model_config.model_name in {
             ModelConfig.z_image().model_name,
@@ -107,13 +111,11 @@ class TrainingRunner:
         is_fibo2 = model_config.model_name == ModelConfig.fibo2().model_name
         is_iris = model_config.model_name == ModelConfig.iris_3b().model_name
         is_anima = model_config.model_name == ModelConfig.anima_base().model_name
-        is_qwen21 = model_config.model_name in {
-            ModelConfig.qwen_image_21().model_name,
-            ModelConfig.qwen_image_21_turbo().model_name,
-        }
         if training_spec.is_edit and not is_flux2_base:
             raise ValueError("Edit training currently supports only FLUX.2-klein-base models.")
-        if is_ernie:
+        if is_qwen21_forked:
+            adapter_class = Qwen21ForkedTrainingAdapter
+        elif is_ernie:
             adapter_class = ErnieTrainingAdapter
         elif is_zimage:
             adapter_class = ZImageTrainingAdapter
@@ -129,8 +131,6 @@ class TrainingRunner:
             adapter_class = IrisTrainingAdapter
         elif is_anima:
             adapter_class = AnimaTrainingAdapter
-        elif is_qwen21:
-            adapter_class = Qwen21TrainingAdapter
         else:
             raise ValueError("Flux1 training is no longer supported.")
 
