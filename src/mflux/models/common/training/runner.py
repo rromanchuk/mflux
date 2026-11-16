@@ -90,7 +90,12 @@ class TrainingRunner:
         # Set global seed for MLX randomness
         mx_random.seed(training_spec.seed)
 
-        model_config = ModelConfig.from_name(training_spec.model)
+        # Fork: "qwen-image-2.1-forked" and "qwen-image-2.1-turbo-forked" train with this fork's adapter. Imported
+        # here, not at the top, so the import block stays the same as upstream's and merges without a conflict.
+        from mflux.models.qwen21.training_adapter.qwen21_forked_training_adapter import Qwen21ForkedTrainingAdapter
+
+        is_qwen21_forked = Qwen21ForkedTrainingAdapter.is_forked_model(training_spec.model)
+        model_config = ModelConfig.from_name(Qwen21ForkedTrainingAdapter.base_model_name(training_spec.model))
         is_zimage_turbo = model_config.model_name == ModelConfig.z_image_turbo().model_name
         is_zimage = model_config.model_name in {
             ModelConfig.z_image().model_name,
@@ -116,7 +121,9 @@ class TrainingRunner:
         }
         if training_spec.is_edit and not is_flux2_base:
             raise ValueError("Edit training currently supports only FLUX.2-klein-base models.")
-        if is_ernie:
+        if is_qwen21_forked:
+            adapter_class = Qwen21ForkedTrainingAdapter
+        elif is_ernie:
             adapter_class = ErnieTrainingAdapter
         elif is_zimage:
             adapter_class = ZImageTrainingAdapter

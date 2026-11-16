@@ -43,7 +43,7 @@ class Qwen21LoRAMapping:
             ("txt_in.in_layer", "txt_in.in_layer"),
             ("txt_in.out_layer", "txt_in.out_layer"),
         ):
-            targets.append(Qwen21LoRAMapping._target(model_path, source_path=source_path))
+            targets.append(Qwen21LoRAMapping._target(model_path, source_path=source_path, model_path_spelling=True))
         # ComfyUI turbo exports also ship direct .diff patches on the RMSNorm weights
         targets.extend(
             LoRATarget(
@@ -61,14 +61,24 @@ class Qwen21LoRAMapping:
         return targets
 
     @staticmethod
-    def _target(model_path: str, source_path: str | None = None, up_transform=None) -> LoRATarget:
+    def _target(
+        model_path: str,
+        source_path: str | None = None,
+        up_transform=None,
+        model_path_spelling: bool = False,
+    ) -> LoRATarget:
         # The same layer is named bare, transformer.- or diffusion_model.-prefixed, with lora_A/B, lora_down/up or
-        # lora.down/up, and may carry a per-layer .alpha (ComfyUI and Lightning exports)
+        # lora.down/up, and may carry a per-layer .alpha (ComfyUI and Lightning exports). The loader applies every
+        # pattern a key matches, so a target only takes a second spelling when the layer needs no transform: a fused
+        # img_mlp.gate_up target must not also claim a bare img_mlp.gate_layer key. mflux's own saved checkpoints key
+        # these adapters by model_path, so those layers accept that spelling too: a resumed run would otherwise
+        # silently drop that layer's trained weights.
         source = source_path or model_path
+        spellings = [source] if source == model_path or not model_path_spelling else [source, model_path]
         return LoRATarget(
             model_path=model_path,
-            possible_up_patterns=[f"{p}{source}.{s}.weight" for p in PREFIXES for s in UP_SUFFIXES],
-            possible_down_patterns=[f"{p}{source}.{s}.weight" for p in PREFIXES for s in DOWN_SUFFIXES],
+            possible_up_patterns=[f"{p}{s}.{u}.weight" for p in PREFIXES for s in spellings for u in UP_SUFFIXES],
+            possible_down_patterns=[f"{p}{s}.{d}.weight" for p in PREFIXES for s in spellings for d in DOWN_SUFFIXES],
             possible_alpha_patterns=[f"{p}{source}.alpha" for p in PREFIXES],
             up_transform=up_transform,
         )
